@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Bus {
+  id                  Int      @id @default(autoincrement())
+  compagnia           String
+  orario_partenza     DateTime
+  destinazione        String
+  sito_web_compagnia  String?
+  contatti            String?
+}
