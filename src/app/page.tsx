@@ -1,15 +1,14 @@
 import { SiteHeader } from "@/components/layout/site-header";
-import { HeroSection } from "@/features/home/sections/hero-section";
-import { StackSection } from "@/features/home/sections/stack-section";
-import { StatusSection } from "@/features/home/sections/status-section";
+import { Container } from "@/components/layout/container";
+import { HomePlanner } from "@/features/home/components/home-planner";
 
 export default function HomePage() {
   return (
-    <main>
+    <main className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-sky-50">
       <SiteHeader />
-      <HeroSection />
-      <StackSection />
-      <StatusSection />
+      <Container className="pt-6 sm:pt-8">
+        <HomePlanner />
+      </Container>
     </main>
   );
 }

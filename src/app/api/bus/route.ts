@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 
-import { createBus, listBus } from "@/features/bus/service";
+import { createBus, listBus, listBusFiltered } from "@/features/bus/service";
 import { parseCreateBusInput } from "@/features/bus/validation";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const buses = await listBus();
+    const { searchParams } = new URL(request.url);
+    const destinazione = searchParams.get("destinazione") ?? undefined;
+    const data = searchParams.get("data") ?? undefined;
+    const ora = searchParams.get("ora") ?? undefined;
+
+    const hasFilters = Boolean(destinazione || data || ora);
+    const buses = hasFilters
+      ? await listBusFiltered({ destinazione, data, ora })
+      : await listBus();
+
     return NextResponse.json(buses);
   } catch (error) {
     console.error(error);
