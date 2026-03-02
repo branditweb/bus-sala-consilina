@@ -16,10 +16,11 @@ Realizzare **Terminal Bus Sala Consilina**, una piattaforma per la gestione e co
 
 ### Stato integrazione
 - Ambiente locale sincronizzato con l'implementazione completa del CRUD.
-- In attesa di commit/push su GitHub e conferma build su Vercel dal repository remoto.
+- Repository GitHub sincronizzato su `main` (commit locale e remoto allineati).
+- Deploy Vercel demandato al collegamento del repository su dashboard/progetto.
 
 ## Problemi Rilevati
 - Connessione database: **attiva**. Verifica effettuata con Prisma (`migrate status` e introspezione `db pull` su NeonDB).
 - Sincronizzazione Prisma/NeonDB: **corretta**. Lo schema risulta aggiornato e la tabella `Bus` è presente.
 - API `src/app/api/bus`: **nessun errore bloccante** per il passaggio dati (lint/build OK e CRUD operativo), ma la gestione errori è troppo generica: in alcuni `catch` gli errori server vengono restituiti come `400` invece di `500`, rendendo più difficile diagnosticare problemi reali di backend.
-- Blocco reale attuale: **pubblicazione online non completata**. Il push verso GitHub è fermo per autenticazione (`could not read Username for 'https://github.com'`), quindi Vercel non può avviare una nuova build dal branch `main`.
+- Limite operativo attuale: da questo ambiente non è installata la CLI Vercel (`vercel` non disponibile), quindi la verifica diretta dello stato build va fatta dalla dashboard Vercel.
