@@ -1,75 +1,185 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { ChatApiResponse } from "@/features/chat/types";
 import { BusItem } from "@/features/bus/api";
+import { ChatApiResponse } from "@/features/chat/types";
+import { FloatingAiChat } from "@/features/home/components/floating-ai-chat";
 
-type PlannerMessage = {
+type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
 };
 
-const formatBusDate = (dateISO: string) =>
+type TrendItem = {
+  city: string;
+  price: string;
+  rating: string;
+  duration: string;
+  image: string;
+  description: string;
+};
+
+const defaultTrending: TrendItem[] = [
+  {
+    city: "Sala Consilina",
+    price: "da 9 EUR",
+    rating: "4.8",
+    duration: "2h 45m viaggio",
+    image:
+      "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=900&q=80",
+    description: "Snodo principale per collegamenti veloci nel sud Italia.",
+  },
+  {
+    city: "Roma Tiburtina",
+    price: "da 18 EUR",
+    rating: "4.9",
+    duration: "3h 15m viaggio",
+    image:
+      "https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=900&q=80",
+    description: "Gate di accesso alla capitale con collegamenti frequenti.",
+  },
+  {
+    city: "Salerno",
+    price: "da 8 EUR",
+    rating: "4.6",
+    duration: "1h 35m viaggio",
+    image:
+      "https://images.unsplash.com/photo-1543674892-7d64d45f6100?auto=format&fit=crop&w=900&q=80",
+    description: "Mare, porto e interscambi ferroviari.",
+  },
+  {
+    city: "Napoli",
+    price: "da 12 EUR",
+    rating: "4.7",
+    duration: "2h 10m viaggio",
+    image:
+      "https://images.unsplash.com/photo-1533676802871-eca1ae998cd5?auto=format&fit=crop&w=900&q=80",
+    description: "Centro storico e hub turistico regionale.",
+  },
+];
+
+const formatDeparture = (iso: string) =>
   new Intl.DateTimeFormat("it-IT", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(dateISO));
+  }).format(new Date(iso));
+
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 export function HomePlanner() {
   const [destinazione, setDestinazione] = useState("");
   const [data, setData] = useState("");
   const [ora, setOra] = useState("");
   const [loadingSearch, setLoadingSearch] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
   const [results, setResults] = useState<BusItem[]>([]);
+  const [liveDepartures, setLiveDepartures] = useState<BusItem[]>([]);
+  const [selectedDay, setSelectedDay] = useState<"today" | "tomorrow">("today");
+  const [companyFilter, setCompanyFilter] = useState("all");
 
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [chatMessages, setChatMessages] = useState<PlannerMessage[]>([
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
-      id: "assistant-welcome",
+      id: "welcome",
       role: "assistant",
-      text: "Ciao, sono la tua assistente turistica di Sala Consilina. Posso aiutarti con bus, mete e consigli rapidi.",
+      text: "Ciao, sono la guida AI del Terminal Bus di Sala Consilina. Posso consigliarti tratte e destinazioni.",
     },
   ]);
+  const [trendingItems, setTrendingItems] = useState<TrendItem[]>(defaultTrending);
 
-  const hasResults = useMemo(() => results.length > 0, [results]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const response = await fetch("/api/bus", { cache: "no-store" });
+        if (!response.ok) return;
+        const buses = (await response.json()) as BusItem[];
+        setLiveDepartures(buses.slice(0, 6));
+      } catch {
+        setLiveDepartures([]);
+      }
+    };
+
+    void load();
+  }, []);
+
+  useEffect(() => {
+    const loadTrending = async () => {
+      try {
+        const response = await fetch("/api/trending", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as Array<{
+          city: string;
+          description: string;
+          price_from: string | null;
+          rating: string | null;
+          duration: string | null;
+          image_url: string | null;
+        }>;
+
+        if (data.length === 0) return;
+        setTrendingItems(
+          data.map((item) => ({
+            city: item.city,
+            description: item.description,
+            price: item.price_from ?? "",
+            rating: item.rating ?? "",
+            duration: item.duration ?? "",
+            image: item.image_url ?? defaultTrending[0]?.image ?? "",
+          }))
+        );
+      } catch {
+        // fallback to defaultTrending
+      }
+    };
+
+    void loadTrending();
+  }, []);
+
+  const featuredBus = useMemo(() => results[0] ?? liveDepartures[0] ?? null, [results, liveDepartures]);
+  const displayedDepartures = useMemo(
+    () => (results.length > 0 ? results : liveDepartures),
+    [results, liveDepartures]
+  );
+  const companies = useMemo(() => {
+    const set = new Set(displayedDepartures.map((bus) => bus.compagnia));
+    return ["all", ...Array.from(set)];
+  }, [displayedDepartures]);
+  const filteredDepartures = useMemo(() => {
+    if (companyFilter === "all") return displayedDepartures;
+    return displayedDepartures.filter((bus) => bus.compagnia === companyFilter);
+  }, [displayedDepartures, companyFilter]);
 
   const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     setLoadingSearch(true);
-    setSearchError(null);
-
     try {
       const params = new URLSearchParams();
-      if (destinazione.trim()) {
-        params.set("destinazione", destinazione.trim());
+      if (destinazione.trim()) params.set("destinazione", destinazione.trim());
+      const baseDate = new Date();
+      if (selectedDay === "tomorrow") {
+        baseDate.setDate(baseDate.getDate() + 1);
       }
-      if (data) {
-        params.set("data", data);
-      }
-      if (ora) {
-        params.set("ora", ora);
-      }
+      const dateParam = data || formatLocalDate(baseDate);
+      params.set("data", dateParam);
+      if (ora) params.set("ora", ora);
 
       const response = await fetch(`/api/bus?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) {
-        const error = (await response.json()) as { error?: string };
-        throw new Error(error.error ?? "Errore durante la ricerca delle corse.");
+        setResults([]);
+        return;
       }
 
       const buses = (await response.json()) as BusItem[];
       setResults(buses);
-    } catch (error) {
-      setSearchError(error instanceof Error ? error.message : "Ricerca non disponibile.");
-      setResults([]);
+      if (buses.length > 0) setLiveDepartures(buses.slice(0, 6));
     } finally {
       setLoadingSearch(false);
     }
@@ -77,11 +187,8 @@ export function HomePlanner() {
 
   const handleSendChat = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     const message = chatInput.trim();
-    if (!message || chatLoading) {
-      return;
-    }
+    if (!message || chatLoading) return;
 
     setChatMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: message }]);
     setChatInput("");
@@ -90,45 +197,30 @@ export function HomePlanner() {
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
 
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string };
-        throw new Error(error.error ?? "Errore nella risposta dell'assistente.");
-      }
+      if (!response.ok) throw new Error("Risposta AI non disponibile");
 
       const data = (await response.json()) as ChatApiResponse;
-      const linksText =
-        data.buses.length > 0
-          ? `\n\nLink utili: ${data.buses
-              .filter((bus) => bus.sito_web_compagnia)
-              .map((bus) => `${bus.compagnia} (${bus.sito_web_compagnia})`)
-              .join(" · ")}`
-          : "";
+      const links = data.buses
+        .filter((bus) => bus.sito_web_compagnia)
+        .map((bus) => `${bus.compagnia}: ${bus.sito_web_compagnia}`)
+        .join("\n");
 
       setChatMessages((prev) => [
         ...prev,
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          text: `${data.reply}${linksText}`,
+          text: links ? `${data.reply}\n\nLink utili:\n${links}` : data.reply,
         },
       ]);
-    } catch (error) {
+    } catch {
       setChatMessages((prev) => [
         ...prev,
-        {
-          id: `a-error-${Date.now()}`,
-          role: "assistant",
-          text:
-            error instanceof Error
-              ? `Ora non riesco a rispondere: ${error.message}`
-              : "Ora non riesco a rispondere.",
-        },
+        { id: `a-err-${Date.now()}`, role: "assistant", text: "Non riesco a recuperare i dati ora. Riprova." },
       ]);
     } finally {
       setChatLoading(false);
@@ -136,182 +228,210 @@ export function HomePlanner() {
   };
 
   return (
-    <section className="space-y-6 pb-10">
-      <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-[#f8fbff] via-white to-[#eef7ff] p-5 shadow-sm sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Terminal Bus Sala Consilina</p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">
-          Pianifica la tua partenza in pochi secondi
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm text-slate-600 sm:text-base">
-          Cerca corse per destinazione, data e ora. Se hai dubbi su itinerari o turismo locale, chiedi subito alla nostra assistente AI.
-        </p>
-      </div>
+    <div className="space-y-10 pb-24">
+      <section className="grid gap-6 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
+        <div>
+          <p className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-orange-700">
+            Nuove corse disponibili
+          </p>
+          <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] tracking-tight text-slate-900 sm:text-5xl">
+            Il tuo viaggio
+            <br />
+            <span className="text-slate-400">parte da qui.</span>
+          </h1>
+          <p className="mt-3 max-w-md text-sm text-slate-500">
+            Ricerca rapida in stile booking: destinazione, data e ora. Tutto connesso ai dati reali del terminal.
+          </p>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-5">
-          <form
-            onSubmit={handleSearch}
-            className="rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/60 sm:p-6"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900">Ricerca Corse</p>
-              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">Stile quick-booking</span>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-500">Destinazione</span>
-                <input
-                  required
-                  value={destinazione}
-                  onChange={(event) => setDestinazione(event.target.value)}
-                  placeholder="Es. Roma"
-                  className="h-12 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-500">Data</span>
-                <input
-                  required
-                  type="date"
-                  value={data}
-                  onChange={(event) => setData(event.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-slate-500">Ora</span>
-                <input
-                  required
-                  type="time"
-                  value={ora}
-                  onChange={(event) => setOra(event.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={loadingSearch}
-                className="mt-auto h-12 rounded-xl bg-[#003b95] px-6 text-sm font-semibold text-white transition hover:bg-[#002f78] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingSearch ? "Ricerca..." : "Cerca"}
-              </button>
-            </div>
-          </form>
-
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Risultati disponibili</h2>
-              <Link href="/bus" className="text-xs font-semibold text-sky-700 underline underline-offset-4">
-                Gestione Admin
-              </Link>
-            </div>
-
-            {searchError ? (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{searchError}</p>
-            ) : null}
-
-            {!searchError && !loadingSearch && !hasResults ? (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                Inserisci una destinazione, data e ora per vedere le corse disponibili dal terminal.
-              </p>
-            ) : null}
-
-            {loadingSearch ? (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">Caricamento corse...</p>
-            ) : null}
-
-            {hasResults ? (
-              <div className="space-y-3">
-                {results.map((bus) => (
-                  <article
-                    key={bus.id}
-                    className="rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-slate-50 p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{bus.compagnia}</p>
-                        <p className="text-sm text-slate-600">Sala Consilina → {bus.destinazione}</p>
-                      </div>
-                      <p className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                        {formatBusDate(bus.orario_partenza)}
-                      </p>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                      {bus.sito_web_compagnia ? (
-                        <a
-                          href={bus.sito_web_compagnia}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-semibold text-sky-700 underline underline-offset-4"
-                        >
-                          Vai al sito compagnia
-                        </a>
-                      ) : (
-                        <span>Nessun sito disponibile</span>
-                      )}
-                      <span>{bus.contatti ? `Contatti: ${bus.contatti}` : "Contatti non disponibili"}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        </div>
-
-        <aside className="flex h-full flex-col rounded-3xl border border-emerald-200 bg-[#d9fdd3] p-3 shadow-lg shadow-emerald-100">
-          <div className="rounded-2xl bg-[#075e54] px-4 py-3 text-white">
-            <p className="text-sm font-semibold">AI Assistente Turistica</p>
-            <p className="text-xs text-emerald-100">Sala Consilina e tratte bus</p>
-          </div>
-
-          <div className="mt-3 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-[#ece5dd] p-3">
-            {chatMessages.map((message) => (
-              <div
-                key={message.id}
-                className={`max-w-[90%] rounded-2xl px-3 py-2 text-xs leading-relaxed shadow-sm ${
-                  message.role === "user"
-                    ? "ml-auto rounded-br-sm bg-[#dcf8c6] text-slate-800"
-                    : "rounded-bl-sm bg-white text-slate-800"
-                }`}
-              >
-                <p className="whitespace-pre-line">{message.text}</p>
-              </div>
-            ))}
-
-            {chatLoading ? (
-              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-xs text-slate-500 shadow-sm">
-                Sto controllando i bus e i suggerimenti migliori...
-              </div>
-            ) : null}
-          </div>
-
-          <form onSubmit={handleSendChat} className="mt-3">
-            <div className="flex items-center gap-2 rounded-full bg-white p-1.5">
+          <form onSubmit={handleSearch} className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <div className="grid gap-2 md:grid-cols-[1.4fr_1fr_1fr_auto]">
               <input
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                placeholder="Chiedi all'AI..."
-                className="w-full bg-transparent px-2 text-xs text-slate-800 outline-none"
+                required
+                value={destinazione}
+                onChange={(event) => setDestinazione(event.target.value)}
+                placeholder="Dove vuoi andare?"
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+              />
+              <input
+                required
+                type="date"
+                value={data}
+                onChange={(event) => setData(event.target.value)}
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
+              />
+              <input
+                required
+                type="time"
+                value={ora}
+                onChange={(event) => setOra(event.target.value)}
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
               />
               <button
                 type="submit"
-                disabled={chatLoading || chatInput.trim().length === 0}
-                className="rounded-full bg-[#128c7e] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0f7a6e] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loadingSearch}
+                className="h-11 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white"
               >
-                Invia
+                {loadingSearch ? "Cerco..." : "Cerca"}
               </button>
             </div>
           </form>
 
-          <Link href="/chat" className="mt-3 text-center text-xs font-semibold text-emerald-900 underline underline-offset-4">
-            Apri chat completa
-          </Link>
-        </aside>
-      </div>
-    </section>
+          <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+            <span className="pt-1 text-slate-400">Popular:</span>
+            {["Roma", "Napoli", "Salerno", "Potenza"].map((city) => (
+              <button
+                key={city}
+                type="button"
+                onClick={() => setDestinazione(city)}
+                className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600"
+              >
+                {city}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[1.5rem] bg-gradient-to-br from-slate-900 to-slate-700 p-6 text-white">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Next departure</p>
+          <p className="mt-3 text-2xl font-bold">
+            {featuredBus ? `Sala Consilina -> ${featuredBus.destinazione}` : "Nessuna corsa"}
+          </p>
+          <p className="mt-2 text-sm text-slate-300">
+            {featuredBus
+              ? `${featuredBus.compagnia} · ${formatDeparture(featuredBus.orario_partenza)}`
+              : "Effettua una ricerca per vedere le partenze."}
+          </p>
+          {featuredBus?.sito_web_compagnia ? (
+            <a
+              href={featuredBus.sito_web_compagnia}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-semibold"
+            >
+              Vai al sito compagnia
+            </a>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] bg-white p-6 shadow-sm lg:p-8">
+        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
+          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          LIVE STATION UPDATES
+        </div>
+        <h2 className="mt-3 text-3xl font-extrabold text-slate-900">Departures</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Real-time schedule for {selectedDay === "today" ? "today" : "tomorrow"}&apos;s departures from Sala Consilina.
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedDay("today")}
+            className={`rounded-full px-4 py-2 text-xs font-semibold ${
+              selectedDay === "today" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedDay("tomorrow")}
+            className={`rounded-full px-4 py-2 text-xs font-semibold ${
+              selectedDay === "tomorrow" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            Tomorrow
+          </button>
+          <select
+            value={companyFilter}
+            onChange={(event) => setCompanyFilter(event.target.value)}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600"
+          >
+            {companies.map((company) => (
+              <option key={company} value={company}>
+                {company === "all" ? "Company" : company}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-100 bg-white">
+          <div className="grid grid-cols-[90px_1fr_90px] gap-2 border-b border-slate-100 px-5 py-3 text-xs font-semibold text-slate-400">
+            <span>TIME</span>
+            <span>DESTINATION</span>
+            <span className="text-right">STATUS</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {filteredDepartures.length === 0 ? (
+              <div className="px-5 py-6 text-center text-sm text-slate-500">Nessuna partenza disponibile.</div>
+            ) : (
+              filteredDepartures.map((bus) => (
+                <div key={bus.id} className="grid grid-cols-[90px_1fr_90px] items-center gap-2 px-5 py-4">
+                  <div className="text-lg font-semibold text-slate-900">{formatDeparture(bus.orario_partenza)}</div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{bus.destinazione}</p>
+                    <p className="text-xs text-slate-400">{bus.compagnia}</p>
+                  </div>
+                  <div className="flex justify-end">
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-600">
+                      ONTIME
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Trending Destinations</h2>
+            <p className="mt-1 text-sm text-slate-500">Le tratte piu&apos; richieste in questo momento.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {trendingItems.map((item) => (
+            <button
+              key={item.city}
+              type="button"
+              onClick={() => setDestinazione(item.city)}
+              className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5"
+            >
+              <div className="relative h-40 overflow-hidden">
+                <img src={item.image} alt={item.city} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                <span className="absolute right-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-bold text-slate-800">
+                  {item.price}
+                </span>
+              </div>
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-base font-bold text-slate-900">{item.city}</p>
+                  <span className="text-xs font-semibold text-amber-500">{item.rating} ★</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">{item.description}</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400">{item.duration}</span>
+                  <span className="text-[11px] font-semibold text-slate-900 underline underline-offset-4">
+                    Cerca corsa
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <FloatingAiChat
+        messages={chatMessages}
+        input={chatInput}
+        loading={chatLoading}
+        onInputChange={setChatInput}
+        onSubmit={handleSendChat}
+      />
+    </div>
   );
 }

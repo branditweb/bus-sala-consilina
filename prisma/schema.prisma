@@ -15,3 +15,28 @@ model Bus {
   sito_web_compagnia  String?
   contatti            String?
 }
+
+model Company {
+  id         Int      @id @default(autoincrement())
+  nome       String   @unique
+  slug       String   @unique
+  sito_web   String?
+  telefono   String?
+  email      String?
+  attiva     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model TrendingDestination {
+  id          Int      @id @default(autoincrement())
+  city        String
+  description String
+  price_from  String?
+  rating      String?
+  duration    String?
+  image_url   String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

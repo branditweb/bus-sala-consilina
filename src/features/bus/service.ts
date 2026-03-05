@@ -55,7 +55,6 @@ export const listBusFiltered = (filters: {
     orderBy: {
       orario_partenza: "asc",
     },
-    take: 20,
   });
 };
 

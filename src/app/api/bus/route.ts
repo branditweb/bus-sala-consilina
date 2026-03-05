@@ -11,9 +11,13 @@ export async function GET(request: Request) {
     const ora = searchParams.get("ora") ?? undefined;
 
     const hasFilters = Boolean(destinazione || data || ora);
-    const buses = hasFilters
+    let buses = hasFilters
       ? await listBusFiltered({ destinazione, data, ora })
       : await listBus();
+
+    if (buses.length === 0 && destinazione) {
+      buses = await listBusFiltered({ destinazione });
+    }
 
     return NextResponse.json(buses);
   } catch (error) {
