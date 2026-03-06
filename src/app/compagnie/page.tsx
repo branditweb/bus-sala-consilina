@@ -1,11 +1,11 @@
 import { Container } from "@/components/layout/container";
-import { SiteHeader } from "@/components/layout/site-header";
+import { AdminHeader } from "@/components/layout/admin-header";
 import { CompanyAdminPanel } from "@/features/companies/components/company-admin-panel";
 
 export default function CompagniePage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100">
-      <SiteHeader />
+      <AdminHeader />
       <section className="py-10 sm:py-14">
         <Container className="space-y-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">

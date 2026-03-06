@@ -1,11 +1,11 @@
-import { SiteHeader } from "@/components/layout/site-header";
+import { AdminHeader } from "@/components/layout/admin-header";
 import { Container } from "@/components/layout/container";
 import { BusAdminPanel } from "@/features/bus/components/bus-admin-panel";
 
 export default function BusPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-brand-50/70 via-slate-50 to-slate-100">
-      <SiteHeader />
+      <AdminHeader />
 
       <section className="py-10 sm:py-14">
         <Container className="space-y-6">
